@@ -1,0 +1,81 @@
+
+/* .title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  color: #1f2937;
+} */
+
+.form {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.formGroup {
+  flex: 1;
+}
+
+
+
+
+.addButton {
+  align-self: flex-end;
+  padding: 0.5rem 1rem;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.addButton:hover {
+  background-color: #2563eb;
+}
+
+
+
+.deleteButton {
+  padding: 0.25rem 0.5rem;
+  background-color: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.deleteButton:hover {
+  background-color: #dc2626;
+}
+
+.summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.total {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.registerButton {
+  padding: 0.5rem 1rem;
+  background-color: #10b981;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease-in-out;
+}
+
+.registerButton:hover {
+  background-color: #059669;
+}
+
