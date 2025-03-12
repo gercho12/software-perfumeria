@@ -6,24 +6,19 @@ module.exports = {
       args: 'start',
       cwd: './',
       env: {
-        NODE_ENV: 'production',
-        PORT: 3000
-      },
-      watch: false,
-      autorestart: true,
-      max_restarts: 10
+        PORT: 3000,
+        NODE_ENV: 'production'
+      }
     },
     {
       name: 'backend',
-      script: 'src/backend/index.js',
-      cwd: './',
+      script: 'npm',
+      args: 'start',
+      cwd: './src/backend',
       env: {
-        NODE_ENV: 'production',
-        PORT: 5000
-      },
-      watch: false,
-      autorestart: true,
-      max_restarts: 10
+        PORT: 3001,
+        NODE_ENV: 'production'
+      }
     }
   ]
-}
+};
