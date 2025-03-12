@@ -1,16 +1,29 @@
 module.exports = {
-  apps: [{
-    name: 'perfumeria-backend',
-    script: 'src/backend/index.js',
-    instances: 1,
-    autorestart: true,
-    watch: false,
-    max_memory_restart: '1G',
-    env: {
-      NODE_ENV: 'development'
+  apps: [
+    {
+      name: 'frontend',
+      script: 'npm',
+      args: 'start',
+      cwd: './',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3000
+      },
+      watch: false,
+      autorestart: true,
+      max_restarts: 10
     },
-    env_production: {
-      NODE_ENV: 'production'
+    {
+      name: 'backend',
+      script: 'src/backend/index.js',
+      cwd: './',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 5000
+      },
+      watch: false,
+      autorestart: true,
+      max_restarts: 10
     }
-  }]
+  ]
 }

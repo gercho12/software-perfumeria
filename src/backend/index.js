@@ -1,16 +1,10 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
-const path = require('path');
 const app = express();
 const port = 3001; // Choose an available port
 require('dotenv').config();
 const cors = require('cors');
 app.use(cors()); // Permite solicitudes desde cualquier origen (para desarrollo)
-
-// Serve static files from the React build directory in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../../build')));
-}
 
 const pool = mysql.createPool({
     host: 'mysql-176259-0.cloudclusters.net',
@@ -78,13 +72,6 @@ app.delete('/api/products/:id', async (req, res) => {
 });
 
 
-// Serve React app for any unmatched routes in production
-if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../../build/index.html'));
-  });
-}
-
 app.listen(port, () => {
-  console.log(`Backend server listening on port ${port} in ${process.env.NODE_ENV} mode`);
+  console.log(`Backend server listening on port ${port}`);
 });
