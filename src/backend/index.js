@@ -4,21 +4,8 @@ const app = express();
 const port = 3001; // Choose an available port
 require('dotenv').config();
 const cors = require('cors');
-// Configure CORS with specific options
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  exposedHeaders: ['Content-Length', 'X-Requested-With']
-}));
+app.use(cors()); // Permite solicitudes desde cualquier origen (para desarrollo)
 
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  next();
-});
 // Root route handler
 app.get('/', (req, res) => {
     res.json({ message: 'Backend API is running' });
@@ -90,6 +77,6 @@ app.delete('/api/products/:id', async (req, res) => {
 });
 
 
-app.listen(port, '0.0.0.0', () => {
-  console.log(`Backend server listening on all interfaces, port ${port}`);
+app.listen(port, () => {
+  console.log(`Backend server listening on port ${port}`);
 });
