@@ -4,7 +4,12 @@ const app = express();
 const port = 3001; // Choose an available port
 require('dotenv').config();
 const cors = require('cors');
-app.use(cors()); // Permite solicitudes desde cualquier origen (para desarrollo)
+// Configure CORS with specific options
+app.use(cors({
+  origin: '*', // In production, replace with specific origin
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type']
+}));
 
 // Root route handler
 app.get('/', (req, res) => {
@@ -77,6 +82,6 @@ app.delete('/api/products/:id', async (req, res) => {
 });
 
 
-app.listen(port, () => {
-  console.log(`Backend server listening on port ${port}`);
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Backend server listening on all interfaces, port ${port}`);
 });
