@@ -6,11 +6,19 @@ require('dotenv').config();
 const cors = require('cors');
 // Configure CORS with specific options
 app.use(cors({
-  origin: '*', // In production, replace with specific origin
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  exposedHeaders: ['Content-Length', 'X-Requested-With']
 }));
 
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  next();
+});
 // Root route handler
 app.get('/', (req, res) => {
     res.json({ message: 'Backend API is running' });
