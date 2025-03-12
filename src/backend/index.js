@@ -6,6 +6,11 @@ require('dotenv').config();
 const cors = require('cors');
 app.use(cors()); // Permite solicitudes desde cualquier origen (para desarrollo)
 
+// Root route handler
+app.get('/', (req, res) => {
+    res.json({ message: 'Backend API is running' });
+});
+
 const pool = mysql.createPool({
     host: 'mysql-176259-0.cloudclusters.net',
     user: 'admin', // Replace with your username
