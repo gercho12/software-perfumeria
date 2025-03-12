@@ -11,7 +11,7 @@ export default function NuevoProducto({ onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('http://localhost:3001/api/products', {
+      const response = await fetch('http://ec2-18-216-138-198.us-east-2.compute.amazonaws.com:3001/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ descripcion: nombre, precio: parseFloat(precio), stock: parseInt(stock), codigo: codigoBarras }),
