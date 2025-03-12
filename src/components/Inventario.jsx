@@ -14,7 +14,7 @@ export default function Inventario() {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await fetch('http://localhost:3001/api/products');
+        const response = await fetch('/api/products');
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -31,7 +31,7 @@ export default function Inventario() {
 
   const fetchProducts = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/products');
+      const response = await fetch('/api/products');
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -76,7 +76,7 @@ producto.codigo?.toString().includes(searchTerm)
 
   const updateStock = async (producto, newStock) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/products/${producto.id}`, {
+      const response = await fetch(`/api/products/${producto.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...producto, stock: newStock }),
@@ -103,7 +103,7 @@ producto.codigo?.toString().includes(searchTerm)
   const saveEdit = async () => {
     if (editingProduct) {
       try {
-        const response = await fetch(`http://localhost:3001/api/products/${editingProduct.id}`, {
+        const response = await fetch(`/api/products/${editingProduct.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(editingProduct),
@@ -111,9 +111,9 @@ producto.codigo?.toString().includes(searchTerm)
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        console.log("Saving product:", editingProduct); // Debugging log
+        console.log("Saving product:", editingProduct);
         const updatedProduct = await response.json();
-        console.log("Updated product response:", updatedProduct); // Debugging log
+        console.log("Updated product response:", updatedProduct);
         setProductos(productos.map((p) => (p.id === editingProduct.id ? updatedProduct : p)));
         setEditingProduct(null);
         fetchProducts();
@@ -127,7 +127,7 @@ producto.codigo?.toString().includes(searchTerm)
   const eliminarProducto = async () => {
     if (editingProduct) {
       try {
-        const response = await fetch(`http://localhost:3001/api/products/${editingProduct.id}`, {
+        const response = await fetch(`/api/products/${editingProduct.id}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(editingProduct),
