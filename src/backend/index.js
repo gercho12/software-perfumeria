@@ -111,62 +111,21 @@ app.post('/api/scrape-price', async (req, res) => {
             if (!priceStr) return null;
             let cleaned = String(priceStr).trim();
 
-            // Remove currency symbols etc., keep digits, dot, comma
+            // Eliminar símbolos no numéricos excepto puntos y comas
             cleaned = cleaned.replace(/[^\d.,]/g, '');
 
-            const numDots = (cleaned.match(/\./g) || []).length;
-            const numCommas = (cleaned.match(/,/g) || []).length;
-            const lastDot = cleaned.lastIndexOf('.');
-            const lastComma = cleaned.lastIndexOf(',');
+            // Eliminar puntos como separadores de miles
+            cleaned = cleaned.replace(/\./g, '');
 
-            let finalStr = cleaned;
+            // Convertir comas a puntos para decimales
+            cleaned = cleaned.replace(/,/g, '.');
 
-            // Case 1: Both dot and comma present
-            if (numDots > 0 && numCommas > 0) {
-                if (lastComma > lastDot) {
-                    // Comma is decimal separator
-                    finalStr = finalStr.replace(/\./g, ''); // Remove dots (thousand separators)
-                    finalStr = finalStr.replace(',', '.'); // Replace last comma with dot
-                } else {
-                    // Dot is decimal separator
-                    finalStr = finalStr.replace(/,/g, ''); // Remove commas (thousand separators)
-                }
-            }
-            // Case 2: Only dots present
-            else if (numDots > 0 && numCommas === 0) {
-                if (numDots > 1) {
-                    // Multiple dots -> thousand separators
-                    finalStr = finalStr.replace(/\./g, '');
-                } else {
-                    const parts = finalStr.split('.');
-                    if (parts.length === 2 && parts[1].length === 3) {
-                        finalStr = parts.join(''); // Remove dot como separador de miles
-                    } else if (lastDot === finalStr.length - 4) {
-                        finalStr = finalStr.replace('.', ''); // Existing check
-                    }
-                }
-            }
-            // Case 3: Only commas present
-            else if (numCommas > 0 && numDots === 0) {
-                if (numCommas > 1) {
-                    // Multiple commas -> thousand separators
-                    finalStr = finalStr.replace(/,/g, '');
-                } else {
-                    // Single comma -> decimal separator
-                    finalStr = finalStr.replace(',', '.');
-                }
-            }
-            // Case 4: No separators (already just digits)
+            const numericValue = parseFloat(cleaned);
 
-            const numericPrice = parseFloat(finalStr);
+            console.log(`[Scraper AR] Original: "${priceStr}", Transformado: "${cleaned}", Valor: ${numericValue}`);
 
-            console.log(`[Scraper Normalize Improved] Original: "${priceStr}", Cleaned: "${cleaned}", FinalStr: "${finalStr}", Parsed: ${numericPrice}`);
-
-            // Keep validation range
-            if (!isNaN(numericPrice) && numericPrice > 0 && numericPrice < 1000000) {
-                return numericPrice;
-            }
-            return null; // Return null if invalid or out of range
+            // Validar y retornar
+            return numericValue > 0 && numericValue < 1000000 ? numericValue : null;
         };
 
         // --- Basic Price Scraping Logic --- 
