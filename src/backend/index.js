@@ -138,11 +138,12 @@ app.post('/api/scrape-price', async (req, res) => {
                     // Multiple dots -> thousand separators
                     finalStr = finalStr.replace(/\./g, '');
                 } else {
-                    // Single dot: check if it looks like a thousand separator (e.g., 1.234 or 20.890)
-                    if (lastDot === finalStr.length - 4) {
-                         finalStr = finalStr.replace('.', ''); // Treat as thousand separator
-                    } 
-                    // Otherwise, treat as decimal (e.g., 20.89)
+                    const parts = finalStr.split('.');
+                    if (parts.length === 2 && parts[1].length === 3) {
+                        finalStr = parts.join(''); // Remove dot como separador de miles
+                    } else if (lastDot === finalStr.length - 4) {
+                        finalStr = finalStr.replace('.', ''); // Existing check
+                    }
                 }
             }
             // Case 3: Only commas present
