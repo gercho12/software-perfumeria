@@ -114,16 +114,26 @@ app.post('/api/scrape-price', async (req, res) => {
             // Eliminar símbolos no numéricos excepto puntos y comas
             cleaned = cleaned.replace(/[^\d.,]/g, '');
 
-            // Eliminar puntos solo si están seguidos de 3 dígitos (separador de miles)
-            cleaned = cleaned.replace(/\.(?=\d{3}(?:,|$))/g, '');
+            // Detectar si es formato argentino (coma decimal y punto miles)
+            const isArgentineFormat = cleaned.includes(',') && 
+                                   (cleaned.includes('.') || cleaned.length > 3);
 
-            // Convertir comas decimales a puntos
-            cleaned = cleaned.replace(/,/g, '.');
+            // Convertir comas decimales a puntos y eliminar puntos de miles
+            if (isArgentineFormat) {
+                cleaned = cleaned.replace(/\./g, ''); // Eliminar todos los puntos (miles)
+                cleaned = cleaned.replace(/,/g, '.');  // Convertir coma decimal a punto
+            } else {
+                // Para otros formatos, mantener la lógica original
+                cleaned = cleaned.replace(/,/g, ''); // Eliminar comas
+            }
 
-            // Eliminar puntos sobrantes después de la conversión
-            const parts = cleaned.split('.');
-            if (parts.length > 1) {
-                cleaned = parts[0] + '.' + parts.slice(1).join('');
+            // Manejar ceros finales después del punto decimal
+            if (cleaned.includes('.')) {
+                const [integer, decimal] = cleaned.split('.');
+                cleaned = integer + '.' + decimal.replace(/0+$/, '');
+                if (cleaned.endsWith('.')) {
+                    cleaned = cleaned.slice(0, -1); // Eliminar punto si no hay decimales
+                }
             }
 
             const numericValue = parseFloat(cleaned);
