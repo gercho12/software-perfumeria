@@ -115,25 +115,22 @@ app.post('/api/scrape-price', async (req, res) => {
             cleaned = cleaned.replace(/[^\d.,]/g, '');
 
             // Detectar si es formato argentino (coma decimal y punto miles)
-            const isArgentineFormat = cleaned.includes(',') && 
-                                   (cleaned.includes('.') || cleaned.length > 3);
+            // Considerar que en Argentina el punto es separador de miles y la coma decimal
+            const isArgentineFormat = cleaned.includes('.') && 
+                                   cleaned.includes(',') && 
+                                   cleaned.indexOf('.') < cleaned.indexOf(',');
 
-            // Convertir comas decimales a puntos y eliminar puntos de miles
             if (isArgentineFormat) {
-                cleaned = cleaned.replace(/\./g, ''); // Eliminar todos los puntos (miles)
-                cleaned = cleaned.replace(/,/g, '.');  // Convertir coma decimal a punto
-            } else {
-                // Para otros formatos, mantener la lógica original
-                cleaned = cleaned.replace(/,/g, ''); // Eliminar comas
+                // Eliminar puntos (separadores de miles) y convertir coma decimal a punto
+                cleaned = cleaned.replace(/\./g, '').replace(/,/g, '.');
+            } else if (cleaned.includes(',')) {
+                // Si solo hay comas, asumir que es decimal
+                cleaned = cleaned.replace(/,/g, '.');
             }
 
-            // Manejar ceros finales después del punto decimal
-            if (cleaned.includes('.')) {
-                const [integer, decimal] = cleaned.split('.');
-                cleaned = integer + '.' + decimal.replace(/0+$/, '');
-                if (cleaned.endsWith('.')) {
-                    cleaned = cleaned.slice(0, -1); // Eliminar punto si no hay decimales
-                }
+            // Manejar casos como '20.890' que debería ser 20890
+            if (cleaned.includes('.') && cleaned.split('.')[1].length >= 3) {
+                cleaned = cleaned.replace('.', '');
             }
 
             const numericValue = parseFloat(cleaned);
