@@ -19,7 +19,7 @@ export default function NuevoProducto({ onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/products', {
+      const response = await fetch('http://ec2-18-216-138-198.us-east-2.compute.amazonaws.com:3001/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ descripcion: nombre, precio: parseFloat(precio), stock: parseInt(stock), codigo: codigoBarras }),
@@ -88,6 +88,50 @@ export default function NuevoProducto({ onClose }) {
             let priceFound = null;
             let priceSource = "none"; // Para rastrear de dónde vino el precio
 
+            // --- Helper function for normalization ---
+            const normalizePrice = (priceStr) => {
+                if (!priceStr) return null;
+                let cleaned = String(priceStr).trim();
+
+                // Remove currency symbols etc., keep digits, dot, comma
+                cleaned = cleaned.replace(/[^\d.,]/g, '');
+
+                // Find last separator
+                const lastDot = cleaned.lastIndexOf('.');
+                const lastComma = cleaned.lastIndexOf(',');
+
+                // Remove all separators except the last one
+                let finalStr = "";
+                for (let i = 0; i < cleaned.length; i++) {
+                    const char = cleaned[i];
+                    if (/\d/.test(char)) {
+                        finalStr += char;
+                    } else if (char === '.' && i === lastDot && lastDot > lastComma) {
+                        finalStr += '.'; // Keep last dot if it's the true last separator
+                    } else if (char === ',' && i === lastComma && lastComma > lastDot) {
+                        finalStr += ','; // Keep last comma if it's the true last separator
+                    } else if (char === '.' && i === lastDot && lastComma === -1) {
+                         finalStr += '.'; // Keep dot if it's the only separator type
+                    } else if (char === ',' && i === lastComma && lastDot === -1) {
+                         finalStr += ','; // Keep comma if it's the only separator type
+                    }
+                    // Otherwise, discard the separator (it's a thousand separator)
+                }
+
+                // Replace last comma with dot if it exists
+                finalStr = finalStr.replace(',', '.');
+
+                const numericPrice = parseFloat(finalStr);
+
+                console.log(`Original: "${priceStr}", Cleaned: "${cleaned}", FinalStr: "${finalStr}", Parsed: ${numericPrice}`);
+
+                // Keep validation range, allow slightly lower prices like 0.50
+                if (!isNaN(numericPrice) && numericPrice > 0 && numericPrice < 1000000) { 
+                    return numericPrice;
+                }
+                return null; // Return null if invalid or out of range
+            };
+
             // 1. Buscar en datos estructurados (pagemap) - PRIORIDAD ALTA
             console.log("Buscando precio en datos estructurados (pagemap)...");
             if (currentItem.pagemap) {
@@ -107,14 +151,13 @@ export default function NuevoProducto({ onClose }) {
 
             if (priceFound) {
                 console.log(`Precio encontrado en datos estructurados (${priceSource}): ${priceFound}`);
-                // Validar y normalizar precio estructurado
-                const normalizedPriceStr = String(priceFound).replace(/[^\d.,]/g, '').replace(/\.(?=.*[,.])/g, '').replace(',', '.');
-                const numericPrice = parseFloat(normalizedPriceStr);
-                if (!isNaN(numericPrice) && numericPrice > 0 && numericPrice < 1000000) { // Aumentar límite superior
+                // Validar y normalizar precio estructurado usando la nueva función
+                const numericPrice = normalizePrice(priceFound);
+                if (numericPrice) { // Check if normalization returned a valid number
                     console.log(`Precio estructurado validado: ${numericPrice}`);
                     return numericPrice; // Devolver inmediatamente si se encuentra y valida
                 } else {
-                    console.log(`Precio estructurado inválido o fuera de rango: ${numericPrice}. Continuando búsqueda...`);
+                    console.log(`Precio estructurado inválido o fuera de rango: ${priceFound}. Continuando búsqueda...`);
                     priceFound = null; // Resetear si no es válido
                 }
             } else {
@@ -131,11 +174,10 @@ export default function NuevoProducto({ onClose }) {
             let match;
 
             while ((match = priceRegex.exec(textToSearch)) !== null) {
-                const priceString = match[1];
-                const normalizedPriceStr = priceString.replace(/\.(?=.*[,.])/g, '').replace(',', '.');
-                const numericPrice = parseFloat(normalizedPriceStr);
+                // Normalize the full matched string using the helper function
+                const numericPrice = normalizePrice(match[0]);
 
-                if (!isNaN(numericPrice) && numericPrice > 0.1 && numericPrice < 1000000) { // Ajustar rango mínimo y máximo
+                if (numericPrice) { // Check if normalization returned a valid number
                     // --- Lógica de contexto para descartar falsos positivos --- 
                     const matchIndex = match.index;
                     const matchEndIndex = matchIndex + match[0].length;
@@ -147,7 +189,8 @@ export default function NuevoProducto({ onClose }) {
                     // Descartar si parece parte de un código, ID, año, cantidad grande, etc.
                     const isLikelyCode = /(\d{4,}|isbn|ref|id|codigo|ean|año|modelo)/i.test(fullContext);
                     // --- Refined Quantity/Volume Check --- 
-                    const numStr = match[1].replace('.', '\\.'); // Escaped number string for regex
+                    // Use the raw matched number group for quantity checks if needed, or adapt
+                    const numStr = match[1].replace('.', '\\.'); // Escaped number string from regex group 1
                     const isPrecededByX = new RegExp(`\\bx\\s*${numStr}\\b`, 'i').test(fullContext);
                     const isFollowedByUnit = new RegExp(`\\b${numStr}\\s*(ml|l|kg|g|gr|cm|mm|uds|unidades|pack|litros|gramos)\\b`, 'i').test(fullContext);
                     const isPrecededByKeyword = new RegExp(`\\b(pack|uds|unidades|cantidad|stock|volumen|contenido|cont\\.? net\\.?|peso)\\s*:?\\s*${numStr}\\b`, 'i').test(fullContext);
@@ -164,8 +207,8 @@ export default function NuevoProducto({ onClose }) {
                         potentialPrices.push(numericPrice); // Añadir solo si NO es código/cantidad/volumen
                     }
                 } else {
-                  // No loguear aquí si el precio es inválido por rango, ya que puede ser un código largo
-                  // console.log(`Precio Regex inválido o fuera de rango: ${numericPrice}`);
+                  // Price was invalid after normalization or out of range, ignore
+                  // console.log(`Precio Regex inválido o fuera de rango: ${match[0]}`);
                 }
             }
 
@@ -210,7 +253,7 @@ export default function NuevoProducto({ onClose }) {
                     // **NOTA:** Este endpoint '/api/scrape-price' debe ser implementado en tu backend.
                     // Debe aceptar una URL en el cuerpo (ej: { url: pageUrl })
                     // y devolver el precio encontrado (ej: { price: 19.99 }) o un error.
-                    const scrapeResponse = await fetch('http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/scrape-price', { // Asegúrate que la URL del backend sea correcta
+                    const scrapeResponse = await fetch('http://ec2-18-216-138-198.us-east-2.compute.amazonaws.com:3001/api/scrape-price', { // Asegúrate que la URL del backend sea correcta
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ url: pageUrl })

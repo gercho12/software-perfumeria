@@ -106,6 +106,49 @@ app.post('/api/scrape-price', async (req, res) => {
         let price = null;
         let found = false;
 
+        // --- Helper function for normalization ---
+        const normalizePrice = (priceStr) => {
+            if (!priceStr) return null;
+            let cleaned = String(priceStr).trim();
+
+            // Remove currency symbols etc., keep digits, dot, comma
+            cleaned = cleaned.replace(/[^\d.,]/g, '');
+
+            // Find last separator
+            const lastDot = cleaned.lastIndexOf('.');
+            const lastComma = cleaned.lastIndexOf(',');
+
+            // Determine if dot or comma is the decimal separator
+            let decimalSeparator = '.'; // Default
+            if (lastComma > lastDot) {
+                decimalSeparator = ',';
+            } else if (lastDot === -1 && lastComma !== -1) {
+                decimalSeparator = ','; // Only commas present
+            }
+
+            // Remove all thousand separators, keep the decimal one
+            let finalStr = "";
+            for (let i = 0; i < cleaned.length; i++) {
+                const char = cleaned[i];
+                if (/\d/.test(char)) {
+                    finalStr += char;
+                } else if (char === decimalSeparator && i === (decimalSeparator === '.' ? lastDot : lastComma)) {
+                    finalStr += '.'; // Always use dot for parseFloat
+                }
+                // Discard other separators (thousand separators)
+            }
+
+            const numericPrice = parseFloat(finalStr);
+
+            console.log(`[Scraper Normalize] Original: "${priceStr}", Cleaned: "${cleaned}", FinalStr: "${finalStr}", Parsed: ${numericPrice}`);
+
+            // Keep validation range
+            if (!isNaN(numericPrice) && numericPrice > 0 && numericPrice < 1000000) { 
+                return numericPrice;
+            }
+            return null; // Return null if invalid or out of range
+        };
+
         // --- Basic Price Scraping Logic --- 
         // This is a simplified example and might need adjustments per target site
         // 1. Look for common price elements/attributes
@@ -127,10 +170,9 @@ app.post('/api/scrape-price', async (req, res) => {
             $(selector).each((i, el) => {
                 const priceText = $(el).text().trim() || $(el).attr('content'); // Check text content and 'content' attribute
                 if (priceText) {
-                    // Basic cleaning and validation
-                    const cleanedPrice = priceText.replace(/[^\d.,]/g, '').replace(',', '.'); // Keep digits, dots, commas; replace comma with dot
-                    const numericPrice = parseFloat(cleanedPrice);
-                    if (!isNaN(numericPrice) && numericPrice > 0) {
+                    // Basic cleaning and validation using the helper function
+                    const numericPrice = normalizePrice(priceText);
+                    if (numericPrice) { // Check if normalization returned a valid number
                         console.log(`Price found with selector '${selector}': ${numericPrice}`);
                         price = numericPrice;
                         found = true;
@@ -145,15 +187,17 @@ app.post('/api/scrape-price', async (req, res) => {
         if (!found) {
             console.log("Price not found with common selectors, trying regex on body...");
             const bodyText = $('body').text();
-            const priceRegex = /(?:[$€£]|USD|EUR)?\s?(\d{1,3}(?:[,.]\d{3})*(?:[.,]\d{1,2})|\d+(?:[.,]\d{1,2})?)\s?(?:[$€£]|USD|EUR)?/i;
-            const match = bodyText.match(priceRegex);
-            if (match && match[1]) {
-                 const cleanedPrice = match[1].replace(/[^\d.,]/g, '').replace(',', '.');
-                 const numericPrice = parseFloat(cleanedPrice);
-                 if (!isNaN(numericPrice) && numericPrice > 0) {
+            // Regex to find potential price strings (more lenient)
+            const priceRegex = /(?:[$€£]|USD|EUR)?\s?([\d.,]+(?:[.,]\d+)?)\s?(?:[$€£]|USD|EUR)?/gi;
+            let match;
+            while ((match = priceRegex.exec(bodyText)) !== null) {
+                 // Normalize the potential price string using the helper function
+                 const numericPrice = normalizePrice(match[0]); // Pass the full match
+                 if (numericPrice) {
                     console.log(`Price found with regex: ${numericPrice}`);
                     price = numericPrice;
                     found = true;
+                    break; // Stop after first valid regex match
                  }
             }
         }
