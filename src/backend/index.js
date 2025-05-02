@@ -76,6 +76,117 @@ app.delete('/api/products/:id', async (req, res) => {
     }
 });
 
+// POST /api/scrape-price (Scrape price from URL)
+const axios = require('axios');
+const cheerio = require('cheerio');
+
+app.post('/api/scrape-price', async (req, res) => {
+    const { url } = req.body;
+    if (!url) {
+        return res.status(400).json({ error: 'URL is required' });
+    }
+
+    console.log(`Scraping price from: ${url}`);
+
+    try {
+        // Fetch HTML content
+        const { data: html } = await axios.get(url, {
+            headers: {
+                // Simulate a browser user agent to avoid simple blocks
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+            },
+            timeout: 10000 // 10 seconds timeout
+        });
+
+        // Load HTML into Cheerio
+        const $ = cheerio.load(html);
+
+        let price = null;
+        let found = false;
+
+        // --- Basic Price Scraping Logic --- 
+        // This is a simplified example and might need adjustments per target site
+        // 1. Look for common price elements/attributes
+        const priceSelectors = [
+            '[itemprop="price"]',
+            '.price',
+            '.Price',
+            '.precio',
+            '#price',
+            '#precio',
+            '[class*="price"]',
+            '[id*="price"]',
+            'span[class*="amount"]',
+            'div[class*="price"]'
+            // Add more specific selectors based on common e-commerce platforms if needed
+        ];
+
+        for (const selector of priceSelectors) {
+            $(selector).each((i, el) => {
+                const priceText = $(el).text().trim() || $(el).attr('content'); // Check text content and 'content' attribute
+                if (priceText) {
+                    // Basic cleaning and validation
+                    const cleanedPrice = priceText.replace(/[^\d.,]/g, '').replace(',', '.'); // Keep digits, dots, commas; replace comma with dot
+                    const numericPrice = parseFloat(cleanedPrice);
+                    if (!isNaN(numericPrice) && numericPrice > 0) {
+                        console.log(`Price found with selector '${selector}': ${numericPrice}`);
+                        price = numericPrice;
+                        found = true;
+                        return false; // Stop searching once a valid price is found
+                    }
+                }
+            });
+            if (found) break;
+        }
+
+        // 2. If not found, try regex on the whole body (less reliable)
+        if (!found) {
+            console.log("Price not found with common selectors, trying regex on body...");
+            const bodyText = $('body').text();
+            const priceRegex = /(?:[$€£]|USD|EUR)?\s?(\d{1,3}(?:[,.]\d{3})*(?:[.,]\d{1,2})|\d+(?:[.,]\d{1,2})?)\s?(?:[$€£]|USD|EUR)?/i;
+            const match = bodyText.match(priceRegex);
+            if (match && match[1]) {
+                 const cleanedPrice = match[1].replace(/[^\d.,]/g, '').replace(',', '.');
+                 const numericPrice = parseFloat(cleanedPrice);
+                 if (!isNaN(numericPrice) && numericPrice > 0) {
+                    console.log(`Price found with regex: ${numericPrice}`);
+                    price = numericPrice;
+                    found = true;
+                 }
+            }
+        }
+
+        if (found) {
+            res.json({ price: price });
+        } else {
+            console.log("Could not extract price from the page.");
+            res.status(404).json({ error: 'Could not extract price from the page' });
+        }
+
+    } catch (error) {
+        console.error('Error scraping price:', error.message);
+        // Handle different error types
+        if (error.response) {
+            // Request made and server responded with a status code outside 2xx range
+            console.error('Error status:', error.response.status);
+            console.error('Error data:', error.response.data);
+            res.status(500).json({ error: `Failed to fetch URL (Status: ${error.response.status})` });
+        } else if (error.request) {
+            // Request was made but no response received
+            console.error('Error request:', error.request);
+            res.status(500).json({ error: 'No response received from URL' });
+        } else if (error.code === 'ECONNABORTED') {
+             console.error('Request timed out');
+             res.status(500).json({ error: 'Request timed out while fetching URL' });
+        } else {
+            // Something else happened
+            res.status(500).json({ error: 'An error occurred during scraping' });
+        }
+    }
+});
+
 
 app.listen(port, () => {
   console.log(`Backend server listening on port ${port}`);
