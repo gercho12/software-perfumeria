@@ -114,17 +114,22 @@ app.post('/api/scrape-price', async (req, res) => {
             // Eliminar símbolos no numéricos excepto puntos y comas
             cleaned = cleaned.replace(/[^\d.,]/g, '');
 
-            // Eliminar puntos como separadores de miles
-            cleaned = cleaned.replace(/\./g, '');
+            // Eliminar puntos solo si están seguidos de 3 dígitos (separador de miles)
+            cleaned = cleaned.replace(/\.(?=\d{3}(?:,|$))/g, '');
 
-            // Convertir comas a puntos para decimales
+            // Convertir comas decimales a puntos
             cleaned = cleaned.replace(/,/g, '.');
+
+            // Eliminar puntos sobrantes después de la conversión
+            const parts = cleaned.split('.');
+            if (parts.length > 1) {
+                cleaned = parts[0] + '.' + parts.slice(1).join('');
+            }
 
             const numericValue = parseFloat(cleaned);
 
             console.log(`[Scraper AR] Original: "${priceStr}", Transformado: "${cleaned}", Valor: ${numericValue}`);
 
-            // Validar y retornar
             return numericValue > 0 && numericValue < 1000000 ? numericValue : null;
         };
 
