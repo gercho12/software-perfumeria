@@ -106,7 +106,7 @@ app.post('/api/scrape-price', async (req, res) => {
         let price = null;
         let found = false;
 
-        // --- Helper function for normalization ---
+        // --- Helper function for normalization (Improved) ---
         const normalizePrice = (priceStr) => {
             if (!priceStr) return null;
             let cleaned = String(priceStr).trim();
@@ -114,36 +114,55 @@ app.post('/api/scrape-price', async (req, res) => {
             // Remove currency symbols etc., keep digits, dot, comma
             cleaned = cleaned.replace(/[^\d.,]/g, '');
 
-            // Find last separator
+            const numDots = (cleaned.match(/\./g) || []).length;
+            const numCommas = (cleaned.match(/,/g) || []).length;
             const lastDot = cleaned.lastIndexOf('.');
             const lastComma = cleaned.lastIndexOf(',');
 
-            // Determine if dot or comma is the decimal separator
-            let decimalSeparator = '.'; // Default
-            if (lastComma > lastDot) {
-                decimalSeparator = ',';
-            } else if (lastDot === -1 && lastComma !== -1) {
-                decimalSeparator = ','; // Only commas present
-            }
+            let finalStr = cleaned;
 
-            // Remove all thousand separators, keep the decimal one
-            let finalStr = "";
-            for (let i = 0; i < cleaned.length; i++) {
-                const char = cleaned[i];
-                if (/\d/.test(char)) {
-                    finalStr += char;
-                } else if (char === decimalSeparator && i === (decimalSeparator === '.' ? lastDot : lastComma)) {
-                    finalStr += '.'; // Always use dot for parseFloat
+            // Case 1: Both dot and comma present
+            if (numDots > 0 && numCommas > 0) {
+                if (lastComma > lastDot) {
+                    // Comma is decimal separator
+                    finalStr = finalStr.replace(/\./g, ''); // Remove dots (thousand separators)
+                    finalStr = finalStr.replace(',', '.'); // Replace last comma with dot
+                } else {
+                    // Dot is decimal separator
+                    finalStr = finalStr.replace(/,/g, ''); // Remove commas (thousand separators)
                 }
-                // Discard other separators (thousand separators)
             }
+            // Case 2: Only dots present
+            else if (numDots > 0 && numCommas === 0) {
+                if (numDots > 1) {
+                    // Multiple dots -> thousand separators
+                    finalStr = finalStr.replace(/\./g, '');
+                } else {
+                    // Single dot: check if it looks like a thousand separator (e.g., 1.234 or 20.890)
+                    if (lastDot === finalStr.length - 4) {
+                         finalStr = finalStr.replace('.', ''); // Treat as thousand separator
+                    } 
+                    // Otherwise, treat as decimal (e.g., 20.89)
+                }
+            }
+            // Case 3: Only commas present
+            else if (numCommas > 0 && numDots === 0) {
+                if (numCommas > 1) {
+                    // Multiple commas -> thousand separators
+                    finalStr = finalStr.replace(/,/g, '');
+                } else {
+                    // Single comma -> decimal separator
+                    finalStr = finalStr.replace(',', '.');
+                }
+            }
+            // Case 4: No separators (already just digits)
 
             const numericPrice = parseFloat(finalStr);
 
-            console.log(`[Scraper Normalize] Original: "${priceStr}", Cleaned: "${cleaned}", FinalStr: "${finalStr}", Parsed: ${numericPrice}`);
+            console.log(`[Scraper Normalize Improved] Original: "${priceStr}", Cleaned: "${cleaned}", FinalStr: "${finalStr}", Parsed: ${numericPrice}`);
 
             // Keep validation range
-            if (!isNaN(numericPrice) && numericPrice > 0 && numericPrice < 1000000) { 
+            if (!isNaN(numericPrice) && numericPrice > 0 && numericPrice < 1000000) {
                 return numericPrice;
             }
             return null; // Return null if invalid or out of range
