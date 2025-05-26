@@ -1,23 +1,13 @@
 module.exports = {
   apps: [
     {
-      name: 'frontend',
+      name: 'perfumeria-app',
       script: 'npm',
       args: 'start',
       cwd: './',
       env: {
-        PORT: 3000,
-        NODE_ENV: 'production'
-      }
-    },
-    {
-      name: 'backend',
-      script: 'npm',
-      args: 'start',
-      cwd: './src/backend',
-      env: {
-        PORT: 3001,
-        NODE_ENV: 'production'
+        NODE_ENV: 'production',
+        PORT: 3001
       }
     }
   ]

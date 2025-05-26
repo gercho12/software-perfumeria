@@ -1,10 +1,15 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
+const path = require('path'); // Import path module
 const app = express();
 const port = 3001; // Choose an available port
 require('dotenv').config();
 const cors = require('cors');
-app.use(cors()); // Permite solicitudes desde cualquier origen (para desarrollo)
+
+// Conditional CORS
+if (process.env.NODE_ENV !== 'production') {
+  app.use(cors()); // Permite solicitudes desde cualquier origen (para desarrollo)
+}
 
 // Root route handler
 app.get('/', (req, res) => {
@@ -75,6 +80,11 @@ app.delete('/api/products/:id', async (req, res) => {
         res.status(500).json({ error: 'Failed to delete product' });
     }
 });
+
+// Serve static files from the React app in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../../build')));
+}
 
 // POST /api/scrape-price (Scrape price from URL)
 const axios = require('axios');
@@ -226,3 +236,12 @@ app.post('/api/scrape-price', async (req, res) => {
 app.listen(port, () => {
   console.log(`Backend server listening on port ${port}`);
 });
+
+// The "catchall" handler: for any request that doesn't
+// match one above, send back React's index.html file.
+// This should be the LAST route in your Express app.
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../../build/index.html'));
+  });
+}
