@@ -1,8 +1,8 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
-const path = require('path'); // Import path module
+// const path = require('path'); // No longer needed
 const app = express();
-const port = 3001; // Choose an available port
+const port = process.env.PORT || 3001; // Use Vercel's port or default
 require('dotenv').config();
 const cors = require('cors');
 
@@ -81,10 +81,7 @@ app.delete('/api/products/:id', async (req, res) => {
     }
 });
 
-// Serve static files from the React app in production
-if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../../build')));
-}
+// Static file serving and catch-all removed for Vercel
 
 // POST /api/scrape-price (Scrape price from URL)
 const axios = require('axios');
@@ -237,11 +234,5 @@ app.listen(port, () => {
   console.log(`Backend server listening on port ${port}`);
 });
 
-// The "catchall" handler: for any request that doesn't
-// match one above, send back React's index.html file.
-// This should be the LAST route in your Express app.
-if (process.env.NODE_ENV === 'production') {
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../../build/index.html'));
-  });
-}
+// Export the app for Vercel
+module.exports = app;
