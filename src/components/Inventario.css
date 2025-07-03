@@ -181,3 +181,54 @@ td.stockInput button{
   background-color: #d6ce2c;
 }
 
+/* Estilos para la paginación */
+.paginationControls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 20px 0;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.paginationButton {
+  background-color: #f0f0f0;
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.paginationButton:hover:not(:disabled) {
+  background-color: #e0e0e0;
+}
+
+.paginationButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.paginationInfo {
+  margin: 0 15px;
+  font-size: 14px;
+  color: #666;
+}
+
+/* Estilos para el indicador de carga */
+.loadingIndicator {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+  font-style: italic;
+}
+
+/* Estilos para mensaje de no productos */
+.noProductsMessage {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+  font-style: italic;
+}
+

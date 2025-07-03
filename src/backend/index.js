@@ -24,11 +24,46 @@ app.use(express.json()); // Needed to parse JSON in POST requests
 // GET /api/products
 app.get('/api/products', async (req, res) => {
   try {
-    const [rows] = await pool.execute('SELECT * FROM productos');
-    res.json(rows);
+    // Implementación de paginación
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50; // Número de productos por página
+    const offset = (page - 1) * limit;
+    
+    // Consulta para obtener productos paginados
+    const [rows] = await pool.execute('SELECT * FROM productos LIMIT ? OFFSET ?', [limit, offset]);
+    
+    // Consulta para obtener el total de productos
+    const [countResult] = await pool.execute('SELECT COUNT(*) as total FROM productos');
+    const totalProducts = countResult[0].total;
+    
+    // Enviar respuesta con metadatos de paginación
+    res.json({
+      products: rows,
+      pagination: {
+        total: totalProducts,
+        page: page,
+        limit: limit,
+        totalPages: Math.ceil(totalProducts / limit)
+      }
+    });
   } catch (error) {
     console.error('Error fetching products:', error);
     res.status(500).json({ error: 'Failed to fetch products' });
+  }
+});
+
+// GET /api/products/search
+app.get('/api/products/search', async (req, res) => {
+  try {
+    const searchTerm = req.query.term || '';
+    const [rows] = await pool.execute(
+      'SELECT * FROM productos WHERE descripcion LIKE ? OR codigo LIKE ?', 
+      [`%${searchTerm}%`, `%${searchTerm}%`]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Error searching products:', error);
+    res.status(500).json({ error: 'Failed to search products' });
   }
 });
 
