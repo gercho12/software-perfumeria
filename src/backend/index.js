@@ -20,33 +20,41 @@ const pool = mysql.createPool({
 
 app.use(express.json());
 
-// GET /api/products - Updated for Pagination and Search
+// GET /api/products - CORRECTED for Pagination and Search
 app.get('/api/products', async (req, res) => {
   try {
-    // Extract query parameters with default values
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    // Ensure parameters are integers for security and correctness
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 20;
     const search = req.query.search || '';
 
-    // Calculate offset for SQL query
+    // Offset must also be an integer
     const offset = (page - 1) * limit;
 
     let whereClause = '';
     const params = [];
     if (search) {
+      // The '?' placeholders are for search values only
       whereClause = 'WHERE descripcion LIKE ? OR codigo LIKE ?';
       params.push(`%${search}%`, `%${search}%`);
     }
 
-    // --- Get Total Count for Pagination ---
+    // --- Get Total Count for Pagination (this part was already correct) ---
     const countSql = `SELECT COUNT(*) as total FROM productos ${whereClause}`;
     const [countRows] = await pool.execute(countSql, params);
     const totalProducts = countRows[0].total;
 
     // --- Get Paginated Products ---
-    const productsSql = `SELECT * FROM productos ${whereClause} ORDER BY descripcion ASC LIMIT ? OFFSET ?`;
-    const finalParams = [...params, limit, offset];
-    const [productRows] = await pool.execute(productsSql, finalParams);
+    // CORRECTED: LIMIT and OFFSET are injected directly into the string.
+    // This is safe because we have sanitized them with parseInt().
+    const productsSql = `
+      SELECT * FROM productos 
+      ${whereClause} 
+      ORDER BY descripcion ASC 
+      LIMIT ${limit} OFFSET ${offset}`;
+    
+    // The `params` array now correctly matches the number of '?' in the SQL string.
+    const [productRows] = await pool.execute(productsSql, params);
 
     res.json({
       products: productRows,
