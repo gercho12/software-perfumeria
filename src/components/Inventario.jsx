@@ -1,56 +1,61 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import "./Inventario.css";
 import NuevoProducto from "./NuevoProducto"
 import Navbar from "./Navbar"
+import Pagination from "./Pagination" // Assuming you create this component
+
+const ITEMS_PER_PAGE = 20;
 
 export default function Inventario() {
   const [searchTerm, setSearchTerm] = useState("");
   const [editingProduct, setEditingProduct] = useState(null);
   const [productos, setProductos] = useState([]);
   const [error, setError] = useState(null);
-  const [showForm, setShowForm] = useState(false); // Nuevo estado
+  const [showForm, setShowForm] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
 
+  // Debounce search term
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const response = await fetch('http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/products');
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        setProductos(data);
-      } catch (error) {
-        setError("Error fetching products: " + error.message);
-        console.error(error);
-      } finally {
-      }
-    };
-    fetchProducts();
-  }, []);
-
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
-      const response = await fetch('http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/products');
+      const url = new URL('http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/products');
+      url.searchParams.append('page', currentPage);
+      url.searchParams.append('limit', ITEMS_PER_PAGE);
+      if (debouncedSearchTerm) {
+        url.searchParams.append('search', debouncedSearchTerm);
+      }
+      
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      setProductos(data);
+      setProductos(data.products);
+      setTotalProducts(data.total);
     } catch (error) {
       setError("Error fetching products: " + error.message);
       console.error(error);
-    } finally {
     }
-  };
+  }, [currentPage, debouncedSearchTerm]);
 
+  useEffect(() => {
+    fetchProducts();
+  }, [fetchProducts]);
 
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setCurrentPage(1); // Reset to first page on new search
+    }, 300);
 
-  const filteredProductos = productos.filter(
-    (producto) =>
-      producto.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-producto.codigo?.toString().includes(searchTerm)
-  );
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchTerm]);
 
   const startEditing = (producto) => {
     setEditingProduct({ ...producto });
@@ -60,19 +65,18 @@ producto.codigo?.toString().includes(searchTerm)
     setEditingProduct(null);
   };
 
-      const handleEditChange = (e) => {
-        if (editingProduct) {
-          const value = e.target.name === "stock" ? 
-            (e.target.value === "" ? 0 : parseFloat(e.target.value)) : 
-            e.target.value;
-  
-          setEditingProduct({
-            ...editingProduct,
-            [e.target.name]: value,
-          });
-        }
-      };
-  
+  const handleEditChange = (e) => {
+    if (editingProduct) {
+      const value = e.target.name === "stock" ? 
+        (e.target.value === "" ? 0 : parseFloat(e.target.value)) : 
+        e.target.value;
+
+      setEditingProduct({
+        ...editingProduct,
+        [e.target.name]: value,
+      });
+    }
+  };
 
   const updateStock = async (producto, newStock) => {
     try {
@@ -84,7 +88,8 @@ producto.codigo?.toString().includes(searchTerm)
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      setProductos(productos.map((p) => (p.id === producto.id ? { ...p, stock: newStock } : p)));
+      const updatedProduct = await response.json();
+      setProductos(productos.map((p) => (p.id === producto.id ? updatedProduct : p)));
     } catch (err) {
       setError("Error updating stock: " + err.message);
       console.error(err);
@@ -99,7 +104,6 @@ producto.codigo?.toString().includes(searchTerm)
     updateStock(producto, Math.max(0, producto.stock - 1));
   };
 
-
   const saveEdit = async () => {
     if (editingProduct) {
       try {
@@ -111,12 +115,9 @@ producto.codigo?.toString().includes(searchTerm)
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        console.log("Saving product:", editingProduct);
         const updatedProduct = await response.json();
-        console.log("Updated product response:", updatedProduct);
         setProductos(productos.map((p) => (p.id === editingProduct.id ? updatedProduct : p)));
         setEditingProduct(null);
-        fetchProducts();
       } catch (err) {
         setError("Error saving edits: " + err.message);
         console.error(err);
@@ -128,17 +129,15 @@ producto.codigo?.toString().includes(searchTerm)
     if (editingProduct) {
       try {
         const response = await fetch(`http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/products/${editingProduct.id}`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(editingProduct),
+          method: 'DELETE'
         });
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         setEditingProduct(null);
-        fetchProducts();
+        fetchProducts(); // Refetch products after deletion
       } catch (err) {
-        setError("Error saving edits: " + err.message);
+        setError("Error deleting product: " + err.message);
         console.error(err);
       }
     }
@@ -147,8 +146,7 @@ producto.codigo?.toString().includes(searchTerm)
   if (error) {
     return <div>Error: {error}</div>;
   }
-
-
+  
   function cerrarModal() {
     try {
       setShowForm(false)
@@ -160,7 +158,6 @@ producto.codigo?.toString().includes(searchTerm)
   
   return (
     <div className="containerPrincipal">
-      {/* Barra de búsqueda */}
       <div className="searchBar">
         <input
           type="text"
@@ -169,9 +166,8 @@ producto.codigo?.toString().includes(searchTerm)
           onChange={(e) => setSearchTerm(e.target.value)}
           className="searchInput"
         />
-        <button className='creacionProducto' onClick={() => setShowForm(true)}>Nuevo producto +</button> {/* Modificación: agrega onClick */}
-        </div>
-
+        <button className='creacionProducto' onClick={() => setShowForm(true)}>Nuevo producto +</button>
+      </div>
 
       <div className="tableContainer">
         <table className="table">
@@ -185,9 +181,8 @@ producto.codigo?.toString().includes(searchTerm)
             </tr>
           </thead>
           <tbody>
-            {filteredProductos.map((producto) => (
-              <>
-              <tr key={producto.id} className='productoItem' >
+            {productos.map((producto) => (
+              <tr key={producto.id} className='productoItem'>
                 <td>
                   {editingProduct && editingProduct.id === producto.id ? (
                     <input
@@ -218,22 +213,22 @@ producto.codigo?.toString().includes(searchTerm)
                   <input
                     name="stock"
                     type="number"
-                    value={producto.stock}
+                    value={
+                      editingProduct && editingProduct.id === producto.id
+                        ? editingProduct.stock
+                        : producto.stock
+                    }
                     onChange={(e) => {
                       const newStock = e.target.value === "" ? "" : parseInt(e.target.value, 10);
-                      if (!isNaN(newStock)) {  // Check for valid number
+                      if (!isNaN(newStock)) {
                         setProductos(productos.map((p) =>
                           p.id === producto.id ? { ...p, stock: newStock } : p
                         ));
                       }
                     }}
-                    onBlur={() => {
-                      const newStock = parseInt(producto.stock, 10);
-                      if (isNaN(newStock) || newStock === 0) {
-                        updateStock(producto, 0);
-                      } else {
-                        updateStock(producto, newStock);
-                      }
+                    onBlur={(e) => {
+                      const newStock = parseInt(e.target.value, 10);
+                      updateStock(producto, isNaN(newStock) || newStock < 0 ? 0 : newStock);
                     }}
                     className="editInput"
                   />
@@ -261,9 +256,9 @@ producto.codigo?.toString().includes(searchTerm)
                       <button onClick={eliminarProducto} className="eliminarProducto">
                         Eliminar
                       </button>
-                      {/* <button onClick={cancelEdit} className="cancelButton">
+                      <button onClick={cancelEdit} className="cancelButton">
                         Cancelar
-                      </button> */}
+                      </button>
                     </>
                   ) : (
                     <button onClick={() => startEditing(producto)} className="editButton">
@@ -271,13 +266,19 @@ producto.codigo?.toString().includes(searchTerm)
                     </button>
                   )}
                 </td>
-
               </tr>
-              </>
             ))}
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        currentPage={currentPage}
+        totalItems={totalProducts}
+        itemsPerPage={ITEMS_PER_PAGE}
+        onPageChange={setCurrentPage}
+      />
+
       <div id="myModal" className={`modal ${showForm ? 'show' : ''}`}>
         <div className="modal-content">
           <span className="modal-close" onClick={() => cerrarModal()}>&times;</span>
@@ -287,4 +288,3 @@ producto.codigo?.toString().includes(searchTerm)
     </div>
   );
 }
-

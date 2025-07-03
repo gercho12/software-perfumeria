@@ -1,31 +1,58 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
 const app = express();
-const port = 3001; // Choose an available port
+const port = 3001;
 require('dotenv').config();
 const cors = require('cors');
-app.use(cors()); // Permite solicitudes desde cualquier origen (para desarrollo)
+app.use(cors());
 
-// Root route handler
 app.get('/', (req, res) => {
     res.json({ message: 'Backend API is running' });
 });
 
 const pool = mysql.createPool({
     host: 'mysql-176259-0.cloudclusters.net',
-    user: 'admin', // Replace with your username
-    password: 'vo3XfST8', // Replace with your password
+    user: 'admin',
+    password: 'vo3XfST8',
     database: 'perfumeria',
     port: 19902
 });
 
-app.use(express.json()); // Needed to parse JSON in POST requests
+app.use(express.json());
 
-// GET /api/products
+// GET /api/products - Updated for Pagination and Search
 app.get('/api/products', async (req, res) => {
   try {
-    const [rows] = await pool.execute('SELECT * FROM productos');
-    res.json(rows);
+    // Extract query parameters with default values
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const search = req.query.search || '';
+
+    // Calculate offset for SQL query
+    const offset = (page - 1) * limit;
+
+    let whereClause = '';
+    const params = [];
+    if (search) {
+      whereClause = 'WHERE descripcion LIKE ? OR codigo LIKE ?';
+      params.push(`%${search}%`, `%${search}%`);
+    }
+
+    // --- Get Total Count for Pagination ---
+    const countSql = `SELECT COUNT(*) as total FROM productos ${whereClause}`;
+    const [countRows] = await pool.execute(countSql, params);
+    const totalProducts = countRows[0].total;
+
+    // --- Get Paginated Products ---
+    const productsSql = `SELECT * FROM productos ${whereClause} ORDER BY descripcion ASC LIMIT ? OFFSET ?`;
+    const finalParams = [...params, limit, offset];
+    const [productRows] = await pool.execute(productsSql, finalParams);
+
+    res.json({
+      products: productRows,
+      total: totalProducts,
+    });
+    
   } catch (error) {
     console.error('Error fetching products:', error);
     res.status(500).json({ error: 'Failed to fetch products' });
@@ -52,11 +79,16 @@ app.put('/api/products/:id', async (req, res) => {
   try {
       const { id } = req.params;
       const { descripcion, precio, stock, codigo } = req.body;
-      await pool.execute(
+      const [result] = await pool.execute(
           'UPDATE productos SET descripcion = ?, precio = ?, stock = ?, codigo = ? WHERE id = ?',
           [descripcion, parseFloat(precio), parseInt(stock), codigo, id]
       );
-      res.status(200).json({ message: 'Product updated' });
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+      // Return the updated product data
+      const [updatedProduct] = await pool.execute('SELECT * FROM productos WHERE id = ?', [id]);
+      res.status(200).json(updatedProduct[0]);
   } catch (error) {
       console.error('Error updating product:', error);
       res.status(500).json({ error: 'Failed to update product' });
