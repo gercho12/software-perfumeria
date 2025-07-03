@@ -16,8 +16,22 @@ const pool = mysql.createPool({
     user: 'admin', // Replace with your username
     password: 'vo3XfST8', // Replace with your password
     database: 'perfumeria',
-    port: 19902
+    port: 19902,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 });
+
+// Verificar la conexión a la base de datos al iniciar
+(async () => {
+  try {
+    const connection = await pool.getConnection();
+    console.log('Database connection established successfully');
+    connection.release();
+  } catch (error) {
+    console.error('Error connecting to database:', error);
+  }
+})();
 
 app.use(express.json()); // Needed to parse JSON in POST requests
 
@@ -35,6 +49,12 @@ app.get('/api/products', async (req, res) => {
     // Consulta para obtener el total de productos
     const [countResult] = await pool.execute('SELECT COUNT(*) as total FROM productos');
     const totalProducts = countResult[0].total;
+    
+    // Verificar que rows sea un array válido
+    if (!Array.isArray(rows)) {
+      console.error('Error: rows is not an array', rows);
+      return res.status(500).json({ error: 'Data format error' });
+    }
     
     // Enviar respuesta con metadatos de paginación
     res.json({
@@ -60,6 +80,13 @@ app.get('/api/products/search', async (req, res) => {
       'SELECT * FROM productos WHERE descripcion LIKE ? OR codigo LIKE ?', 
       [`%${searchTerm}%`, `%${searchTerm}%`]
     );
+    
+    // Verificar que rows sea un array válido
+    if (!Array.isArray(rows)) {
+      console.error('Error: search results is not an array', rows);
+      return res.status(500).json({ error: 'Data format error' });
+    }
+    
     res.json(rows);
   } catch (error) {
     console.error('Error searching products:', error);

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import "./Inventario.css";
-import NuevoProducto from "./NuevoProducto"
-import Navbar from "./Navbar"
+import NuevoProducto from "./NuevoProducto";
+import Navbar from "./Navbar";
+import { API_BASE_URL, PAGINATION_DEFAULT_LIMIT } from '../config';
 
 export default function Inventario() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -12,7 +13,7 @@ export default function Inventario() {
   const [isLoading, setIsLoading] = useState(false);
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: 50,
+    limit: PAGINATION_DEFAULT_LIMIT,
     total: 0,
     totalPages: 0
   });
@@ -33,16 +34,35 @@ export default function Inventario() {
   const fetchProducts = async (page, limit) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/products?page=${page}&limit=${limit}`);
+      // Usar la URL base de la configuración
+      const response = await fetch(`${API_BASE_URL}/api/products?page=${page}&limit=${limit}`);
+      
+      // Registrar información de la respuesta para depuración
+      console.log('Respuesta de API:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries([...response.headers.entries()])
+      });
+      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
       const data = await response.json();
+      console.log('Datos recibidos:', data);
+      
+      // Verificar que la respuesta tenga la estructura esperada
+      if (!data || !data.products || !Array.isArray(data.products)) {
+        console.error('Error: Respuesta de API inválida', data);
+        throw new Error('La respuesta del servidor no tiene el formato esperado');
+      }
+      
       setProductos(data.products);
       setPagination(data.pagination);
     } catch (error) {
-      setError("Error fetching products: " + error.message);
-      console.error(error);
+      setError("Error al cargar productos: " + error.message);
+      console.error('Error completo:', error);
+      setProductos([]); // Limpiar productos en caso de error
     } finally {
       setIsLoading(false);
     }
@@ -57,16 +77,35 @@ export default function Inventario() {
     
     setIsLoading(true);
     try {
-      const response = await fetch(`http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/products/search?term=${encodeURIComponent(term)}`);
+      // Usar la URL base de la configuración
+      const response = await fetch(`${API_BASE_URL}/api/products/search?term=${encodeURIComponent(term)}`);
+      
+      // Registrar información de la respuesta para depuración
+      console.log('Respuesta de búsqueda:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries([...response.headers.entries()])
+      });
+      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
+      
       const data = await response.json();
+      console.log('Datos de búsqueda recibidos:', data);
+      
+      // Verificar que la respuesta sea un array válido
+      if (!Array.isArray(data)) {
+        console.error('Error: Resultados de búsqueda inválidos', data);
+        throw new Error('La respuesta del servidor no tiene el formato esperado');
+      }
+      
       setProductos(data);
       setSearchMode(true);
     } catch (error) {
-      setError("Error searching products: " + error.message);
-      console.error(error);
+      setError("Error al buscar productos: " + error.message);
+      console.error('Error completo:', error);
+      setProductos([]); // Limpiar productos en caso de error
     } finally {
       setIsLoading(false);
     }
@@ -119,10 +158,15 @@ export default function Inventario() {
       // Actualizar localmente primero para una experiencia más fluida
       setProductos(productos.map((p) => (p.id === producto.id ? { ...p, stock: newStock } : p)));
       
-      const response = await fetch(`http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/products/${producto.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/products/${producto.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...producto, stock: newStock }),
+      });
+      
+      console.log('Respuesta de actualización de stock:', {
+        status: response.status,
+        statusText: response.statusText
       });
       
       if (!response.ok) {
@@ -132,8 +176,8 @@ export default function Inventario() {
       // No es necesario recargar toda la página después de actualizar el stock
       // Esto mejora la experiencia del usuario al evitar parpadeos innecesarios
     } catch (err) {
-      setError("Error updating stock: " + err.message);
-      console.error(err);
+      setError("Error al actualizar stock: " + err.message);
+      console.error('Error completo:', err);
       
       // En caso de error, revertir el cambio local
       if (searchMode) {
@@ -157,15 +201,21 @@ export default function Inventario() {
     if (editingProduct) {
       try {
         setIsLoading(true);
-        const response = await fetch(`http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/products/${editingProduct.id}`, {
+        const response = await fetch(`${API_BASE_URL}/api/products/${editingProduct.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(editingProduct),
         });
+        
+        console.log('Respuesta de guardar edición:', {
+          status: response.status,
+          statusText: response.statusText
+        });
+        
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        console.log("Saving product:", editingProduct);
+        console.log("Guardando producto:", editingProduct);
         
         // Actualizar la lista actual si estamos en modo búsqueda
         if (searchMode) {
@@ -177,8 +227,8 @@ export default function Inventario() {
         
         setEditingProduct(null);
       } catch (err) {
-        setError("Error saving edits: " + err.message);
-        console.error(err);
+        setError("Error al guardar cambios: " + err.message);
+        console.error('Error completo:', err);
       } finally {
         setIsLoading(false);
       }
@@ -189,10 +239,16 @@ export default function Inventario() {
     if (editingProduct) {
       try {
         setIsLoading(true);
-        const response = await fetch(`http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/products/${editingProduct.id}`, {
+        const response = await fetch(`${API_BASE_URL}/api/products/${editingProduct.id}`, {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
         });
+        
+        console.log('Respuesta de eliminar producto:', {
+          status: response.status,
+          statusText: response.statusText
+        });
+        
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -209,8 +265,8 @@ export default function Inventario() {
           fetchProducts(newPage, pagination.limit);
         }
       } catch (err) {
-        setError("Error deleting product: " + err.message);
-        console.error(err);
+        setError("Error al eliminar producto: " + err.message);
+        console.error('Error completo:', err);
       } finally {
         setIsLoading(false);
       }
