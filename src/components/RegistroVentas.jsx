@@ -10,6 +10,10 @@ export default function RegistroVentas() {
   const [showNuevoProducto, setShowNuevoProducto] = useState(false);
   const [ventasRecientes, setVentasRecientes] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [manualMode, setManualMode] = useState(true);
+  const [compactView, setCompactView] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
   const inputRef = useRef(null);
 
   // Enfocar el input siempre para scanner
@@ -73,6 +77,10 @@ export default function RegistroVentas() {
     if (inputRef.current) inputRef.current.focus();
   };
 
+  const simularEscaneo = async () => {
+    await handleAgregar();
+  };
+
   const eliminarDelCarrito = (productoId) => {
     setCarrito(carrito.filter(i => i.productoId !== productoId));
   };
@@ -115,10 +123,42 @@ export default function RegistroVentas() {
     }
   };
 
+  // Manual mode search
+  useEffect(() => {
+    const controller = new AbortController();
+    const run = async () => {
+      const term = searchTerm.trim();
+      if (term.length < 2) {
+        setSearchResults([]);
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/products/search?term=${encodeURIComponent(term)}`, { signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        setSearchResults(Array.isArray(data) ? data : []);
+      } catch (e) {
+        if (e.name !== 'AbortError') console.error('Error buscando productos', e);
+      }
+    };
+    run();
+    return () => controller.abort();
+  }, [searchTerm]);
+
   return (
     <div className="containerPrincipal">
       {/* Formulario de escaneo */}
       <div className="form">
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input type="checkbox" checked={manualMode} onChange={(e) => setManualMode(e.target.checked)} />
+            Modo manual
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <input type="checkbox" checked={compactView} onChange={(e) => setCompactView(e.target.checked)} />
+            Vista compacta
+          </label>
+        </div>
         <div className="formGroup">
           <label htmlFor="codigoBarras" className="label">Código de Barras</label>
           <input
@@ -144,8 +184,53 @@ export default function RegistroVentas() {
             className="input"
           />
         </div>
-        <button onClick={handleAgregar} className="addButton">Agregar</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={handleAgregar} className="addButton">Agregar</button>
+          <button onClick={simularEscaneo} className="addButton" title="Usar sin escáner">Simular escaneo</button>
+        </div>
       </div>
+
+      {manualMode && (
+        <div className="tableContainer" style={{ marginTop: 12 }}>
+          <div className="formGroup">
+            <label htmlFor="buscar" className="label">Buscar producto (manual)</label>
+            <input
+              id="buscar"
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Nombre o código"
+              className="input"
+            />
+          </div>
+          {searchResults.length > 0 && (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Código</th>
+                  <th>Precio</th>
+                  <th>Stock</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {searchResults.map(p => (
+                  <tr key={p.id}>
+                    <td>{p.descripcion}</td>
+                    <td>{p.codigo}</td>
+                    <td>${Number(p.precio).toFixed(2)}</td>
+                    <td>{p.stock}</td>
+                    <td>
+                      <button onClick={() => agregarAlCarrito(p, Math.max(1, parseInt(cantidad, 10) || 1))} className="addButton">Agregar</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {/* Carrito actual */}
       {carrito.length > 0 && (
@@ -174,7 +259,7 @@ export default function RegistroVentas() {
                         min="1"
                         className="input"
                         onChange={(e) => cambiarCantidad(item.productoId, e.target.value)}
-                        style={{ width: '80px' }}
+                        style={{ width: compactView ? '56px' : '80px' }}
                       />
                     </td>
                     <td>${Number(item.precio).toFixed(2)}</td>
