@@ -1,72 +1,140 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import "./RegistroVentas.css"
+import { API_BASE_URL } from '../config';
+import NuevoProducto from './NuevoProducto';
 
 export default function RegistroVentas() {
-  // Estados para el código de barras y cantidad
   const [codigoBarras, setCodigoBarras] = useState("");
   const [cantidad, setCantidad] = useState("1");
-  // Estado para la lista de productos en la venta actual
-  const [productosVenta, setProductosVenta] = useState([]);
+  const [carrito, setCarrito] = useState([]); // {productoId, descripcion, codigo, precio, cantidad}
+  const [showNuevoProducto, setShowNuevoProducto] = useState(false);
+  const [ventasRecientes, setVentasRecientes] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const inputRef = useRef(null);
 
-  // Simulación de búsqueda de producto por código de barras
-  const buscarProducto = (codigo) => {
-    const productos = [
-      { codigoBarras: "123456789", nombre: "Desodorante Axe", precio: 5.99 },
-      { codigoBarras: "987654321", nombre: "Pañales Huggies", precio: 15.99 },
-      { codigoBarras: "456789123", nombre: "Pintalabios MAC", precio: 20.99 },
-    ];
-    return productos.find((p) => p.codigoBarras === codigo);
-  };
+  // Enfocar el input siempre para scanner
+  useEffect(() => {
+    if (inputRef.current) inputRef.current.focus();
+  }, []);
 
-  // Función para agregar un producto a la venta
-  const agregarProducto = () => {
-    const producto = buscarProducto(codigoBarras);
-    if (producto) {
-      setProductosVenta([...productosVenta, { ...producto, cantidad: Number.parseInt(cantidad) }]);
-      setCodigoBarras("");
-      setCantidad("1");
-    } else {
-      alert("Producto no encontrado");
+  useEffect(() => {
+    cargarVentasRecientes();
+  }, []);
+
+  const cargarVentasRecientes = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/sales/recent?limit=20`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setVentasRecientes(data);
+    } catch (e) {
+      console.error('Error cargando ventas recientes', e);
     }
   };
 
-  // Función para eliminar un producto de la venta
-  const eliminarProducto = (index) => {
-    setProductosVenta(productosVenta.filter((_, i) => i !== index));
+  const buscarProductoPorCodigo = async (codigo) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/products/by-barcode/${encodeURIComponent(codigo)}`);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const p = await res.json();
+      return p;
+    } catch (e) {
+      console.error('Error buscando producto por código', e);
+      return null;
+    }
   };
 
-  // Función para calcular el total de la venta
-  const calcularTotal = () => {
-    return productosVenta.reduce((total, producto) => total + producto.precio * producto.cantidad, 0);
+  const agregarAlCarrito = (producto, qty) => {
+    setCarrito((prev) => {
+      const idx = prev.findIndex(i => i.productoId === producto.id);
+      if (idx >= 0) {
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], cantidad: updated[idx].cantidad + qty };
+        return updated;
+      }
+      return [...prev, { productoId: producto.id, descripcion: producto.descripcion, codigo: producto.codigo, precio: producto.precio, cantidad: qty }];
+    });
   };
 
-  // Función para registrar la venta
-  const registrarVenta = () => {
-    console.log("Venta registrada:", productosVenta);
-    setProductosVenta([]);
+  const handleAgregar = async () => {
+    const codigo = codigoBarras.trim();
+    const qty = Math.max(1, parseInt(cantidad, 10) || 1);
+    if (!codigo) return;
+    const producto = await buscarProductoPorCodigo(codigo);
+    if (!producto) {
+      // Abrir modal para crear producto nuevo con el código precargado
+      setShowNuevoProducto(true);
+      return;
+    }
+    agregarAlCarrito(producto, qty);
+    setCodigoBarras("");
+    setCantidad("1");
+    if (inputRef.current) inputRef.current.focus();
+  };
+
+  const eliminarDelCarrito = (productoId) => {
+    setCarrito(carrito.filter(i => i.productoId !== productoId));
+  };
+
+  const cambiarCantidad = (productoId, nuevaCantidad) => {
+    const qty = Math.max(1, parseInt(nuevaCantidad, 10) || 1);
+    setCarrito(prev => prev.map(i => i.productoId === productoId ? { ...i, cantidad: qty } : i));
+  };
+
+  const totalVenta = carrito.reduce((acc, i) => acc + i.precio * i.cantidad, 0);
+
+  const registrarVenta = async () => {
+    if (carrito.length === 0 || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/sales`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: carrito.map(i => ({ productoId: i.productoId, cantidad: i.cantidad })) })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      await res.json();
+      setCarrito([]);
+      await cargarVentasRecientes();
+    } catch (e) {
+      alert(`Error al registrar venta: ${e.message}`);
+    } finally {
+      setIsSubmitting(false);
+      if (inputRef.current) inputRef.current.focus();
+    }
+  };
+
+  const handleKeyDown = async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      await handleAgregar();
+    }
   };
 
   return (
     <div className="containerPrincipal">
-     {/* Formulario para agregar productos */}
+      {/* Formulario de escaneo */}
       <div className="form">
         <div className="formGroup">
-          <label htmlFor="codigoBarras" className="label">
-            Código de Barras
-          </label>
+          <label htmlFor="codigoBarras" className="label">Código de Barras</label>
           <input
             id="codigoBarras"
             type="text"
+            ref={inputRef}
             value={codigoBarras}
             onChange={(e) => setCodigoBarras(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Escanee o ingrese el código de barras"
             className="input"
+            autoComplete="off"
           />
         </div>
         <div className="formGroup">
-          <label htmlFor="cantidad" className="label">
-            Cantidad
-          </label>
+          <label htmlFor="cantidad" className="label">Cantidad</label>
           <input
             id="cantidad"
             type="number"
@@ -76,18 +144,18 @@ export default function RegistroVentas() {
             className="input"
           />
         </div>
-        <button onClick={agregarProducto} className="addButton">
-          Agregar
-        </button>
+        <button onClick={handleAgregar} className="addButton">Agregar</button>
       </div>
-      {/* Tabla de productos en la venta actual */}
-      {productosVenta.length > 0 && (
+
+      {/* Carrito actual */}
+      {carrito.length > 0 && (
         <>
           <div className="tableContainer">
             <table className="table">
               <thead>
                 <tr>
                   <th>Producto</th>
+                  <th>Código</th>
                   <th>Cantidad</th>
                   <th>Precio Unitario</th>
                   <th>Subtotal</th>
@@ -95,30 +163,76 @@ export default function RegistroVentas() {
                 </tr>
               </thead>
               <tbody>
-                {productosVenta.map((producto, index) => (
-                  <tr key={index}>
-                    <td>{producto.nombre}</td>
-                    <td>{producto.cantidad}</td>
-                    <td>${producto.precio.toFixed(2)}</td>
-                    <td>${(producto.precio * producto.cantidad).toFixed(2)}</td>
+                {carrito.map((item) => (
+                  <tr key={item.productoId}>
+                    <td>{item.descripcion}</td>
+                    <td>{item.codigo}</td>
                     <td>
-                      <button onClick={() => eliminarProducto(index)} className="deleteButton">
-                        Eliminar
-                      </button>
+                      <input
+                        type="number"
+                        value={item.cantidad}
+                        min="1"
+                        className="input"
+                        onChange={(e) => cambiarCantidad(item.productoId, e.target.value)}
+                        style={{ width: '80px' }}
+                      />
+                    </td>
+                    <td>${Number(item.precio).toFixed(2)}</td>
+                    <td>${(Number(item.precio) * item.cantidad).toFixed(2)}</td>
+                    <td>
+                      <button onClick={() => eliminarDelCarrito(item.productoId)} className="deleteButton">Eliminar</button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {/* Resumen y botón para registrar la venta */}
           <div className="summary">
-            <div className="total">Total: ${calcularTotal().toFixed(2)}</div>
-            <button onClick={registrarVenta} className="registerButton">
-              Registrar Venta
+            <div className="total">Total: ${totalVenta.toFixed(2)}</div>
+            <button onClick={registrarVenta} className="registerButton" disabled={isSubmitting}>
+              {isSubmitting ? 'Registrando...' : 'Registrar Venta'}
             </button>
           </div>
         </>
+      )}
+
+      {/* Ventas recientes */}
+      <div className="tableContainer" style={{ marginTop: '24px' }}>
+        <h3>Ventas recientes</h3>
+        {ventasRecientes.length === 0 ? (
+          <div>No hay ventas aún.</div>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Total</th>
+                <th>Detalles</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ventasRecientes.map(v => (
+                <tr key={v.id}>
+                  <td>{new Date(v.fecha).toLocaleString()}</td>
+                  <td>${Number(v.total).toFixed(2)}</td>
+                  <td>
+                    {(v.detalles || []).map(d => `${d.descripcion} x${d.cantidad}`).join(', ')}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Modal para nuevo producto si no existe */}
+      {showNuevoProducto && (
+        <div id="myModal" className={`modal show`}>
+          <div className="modal-content">
+            <span className="modal-close" onClick={() => setShowNuevoProducto(false)}>&times;</span>
+            <NuevoProducto onClose={() => setShowNuevoProducto(false)} />
+          </div>
+        </div>
       )}
     </div>
   );

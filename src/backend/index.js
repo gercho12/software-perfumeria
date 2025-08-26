@@ -35,6 +35,32 @@ const pool = mysql.createPool({
 
 app.use(express.json()); // Needed to parse JSON in POST requests
 
+// Ensure sales tables exist (simple bootstrap)
+(async () => {
+  try {
+    await pool.execute(`CREATE TABLE IF NOT EXISTS ventas (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      total DECIMAL(10,2) NOT NULL
+    )`);
+    await pool.execute(`CREATE TABLE IF NOT EXISTS venta_detalles (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      venta_id INT NOT NULL,
+      producto_id INT NOT NULL,
+      descripcion VARCHAR(255) NOT NULL,
+      codigo VARCHAR(255),
+      cantidad INT NOT NULL,
+      precio DECIMAL(10,2) NOT NULL,
+      subtotal DECIMAL(10,2) NOT NULL,
+      FOREIGN KEY (venta_id) REFERENCES ventas(id) ON DELETE CASCADE
+    )`);
+    // Index for barcode lookups
+    await pool.execute(`CREATE INDEX IF NOT EXISTS idx_productos_codigo ON productos(codigo)`);
+  } catch (e) {
+    console.error('Error ensuring sales tables:', e.message);
+  }
+})();
+
 // GET /api/products
 app.get('/api/products', async (req, res) => {
   try {
@@ -282,6 +308,102 @@ app.post('/api/scrape-price', async (req, res) => {
             res.status(500).json({ error: 'An error occurred during scraping' });
         }
     }
+});
+
+// GET /api/products/by-barcode/:codigo
+app.get('/api/products/by-barcode/:codigo', async (req, res) => {
+  try {
+    const { codigo } = req.params;
+    const [rows] = await pool.execute('SELECT * FROM productos WHERE codigo = ? LIMIT 1', [codigo]);
+    if (!rows || rows.length === 0) return res.status(404).json({ error: 'Producto no encontrado' });
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error fetching product by barcode:', error);
+    res.status(500).json({ error: 'Failed to fetch product by barcode' });
+  }
+});
+
+// POST /api/sales  { items: [{ productoId, cantidad }] }
+app.post('/api/sales', async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Items requeridos' });
+    }
+
+    await connection.beginTransaction();
+
+    // Load products and validate stock
+    const productIds = items.map(i => i.productoId);
+    const [products] = await connection.query(`SELECT * FROM productos WHERE id IN (${productIds.map(() => '?').join(',')})`, productIds);
+    const idToProduct = new Map(products.map(p => [p.id, p]));
+
+    let total = 0;
+    const lineItems = [];
+    for (const item of items) {
+      const product = idToProduct.get(item.productoId);
+      if (!product) throw new Error(`Producto ${item.productoId} no existe`);
+      const qty = parseInt(item.cantidad, 10) || 0;
+      if (qty <= 0) throw new Error('Cantidad inválida');
+      if (product.stock < qty) throw new Error(`Stock insuficiente para ${product.descripcion}`);
+      const subtotal = Number(product.precio) * qty;
+      total += subtotal;
+      lineItems.push({
+        producto_id: product.id,
+        descripcion: product.descripcion,
+        codigo: product.codigo,
+        cantidad: qty,
+        precio: Number(product.precio),
+        subtotal
+      });
+    }
+
+    // Create sale
+    const [saleResult] = await connection.execute('INSERT INTO ventas (total) VALUES (?)', [total]);
+    const ventaId = saleResult.insertId;
+
+    // Insert details and update stock
+    for (const li of lineItems) {
+      await connection.execute(
+        'INSERT INTO venta_detalles (venta_id, producto_id, descripcion, codigo, cantidad, precio, subtotal) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [ventaId, li.producto_id, li.descripcion, li.codigo, li.cantidad, li.precio, li.subtotal]
+      );
+      await connection.execute('UPDATE productos SET stock = stock - ? WHERE id = ?', [li.cantidad, li.producto_id]);
+    }
+
+    await connection.commit();
+    res.status(201).json({ id: ventaId, total, items: lineItems });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error creating sale:', error);
+    res.status(400).json({ error: error.message || 'Failed to create sale' });
+  } finally {
+    connection.release();
+  }
+});
+
+// GET /api/sales/recent?limit=20
+app.get('/api/sales/recent', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+    const [ventas] = await pool.execute('SELECT * FROM ventas ORDER BY fecha DESC LIMIT ?', [limit]);
+    const ventaIds = ventas.map(v => v.id);
+    let detalles = [];
+    if (ventaIds.length > 0) {
+      const [rows] = await pool.query(`SELECT * FROM venta_detalles WHERE venta_id IN (${ventaIds.map(() => '?').join(',')})`, ventaIds);
+      detalles = rows;
+    }
+    const detallesByVenta = detalles.reduce((acc, d) => {
+      (acc[d.venta_id] = acc[d.venta_id] || []).push(d);
+      return acc;
+    }, {});
+    const result = ventas.map(v => ({ ...v, detalles: detallesByVenta[v.id] || [] }));
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching recent sales:', error);
+    res.status(500).json({ error: 'Failed to fetch recent sales' });
+  }
 });
 
 
