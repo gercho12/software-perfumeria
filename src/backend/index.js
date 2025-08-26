@@ -69,8 +69,8 @@ app.get('/api/products', async (req, res) => {
     const limit = parseInt(req.query.limit) || 50; // Número de productos por página
     const offset = (page - 1) * limit;
     
-    // Consulta para obtener productos paginados
-    const [rows] = await pool.execute('SELECT * FROM productos LIMIT ? OFFSET ?', [limit, offset]);
+    // Consulta para obtener productos paginados (interpolar enteros validados para evitar errores con LIMIT/OFFSET parametrizados)
+    const [rows] = await pool.query(`SELECT * FROM productos ORDER BY descripcion ASC LIMIT ${limit} OFFSET ${offset}`);
     
     // Consulta para obtener el total de productos
     const [countResult] = await pool.execute('SELECT COUNT(*) as total FROM productos');
@@ -387,7 +387,7 @@ app.post('/api/sales', async (req, res) => {
 app.get('/api/sales/recent', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 20;
-    const [ventas] = await pool.execute('SELECT * FROM ventas ORDER BY fecha DESC LIMIT ?', [limit]);
+    const [ventas] = await pool.query(`SELECT * FROM ventas ORDER BY fecha DESC LIMIT ${limit}`);
     const ventaIds = ventas.map(v => v.id);
     let detalles = [];
     if (ventaIds.length > 0) {
