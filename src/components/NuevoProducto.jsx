@@ -21,7 +21,11 @@ export default function NuevoProducto({ onClose }) {
     e.preventDefault();
     try {
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
       const response = await fetch(`${API_BASE_URL}/api/products`, {
+=======
+      const response = await fetch('http://ec2-18-119-112-198.us-east-2.compute.amazonaws.com:3001/api/products', {
+>>>>>>> Stashed changes
 =======
       const response = await fetch('http://ec2-18-119-112-198.us-east-2.compute.amazonaws.com:3001/api/products', {
 >>>>>>> Stashed changes
