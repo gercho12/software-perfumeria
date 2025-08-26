@@ -20,15 +20,10 @@ export default function NuevoProducto({ onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
+
       const response = await fetch(`${API_BASE_URL}/api/products`, {
-=======
-      const response = await fetch('http://ec2-18-119-112-198.us-east-2.compute.amazonaws.com:3001/api/products', {
->>>>>>> Stashed changes
-=======
-      const response = await fetch('http://ec2-18-119-112-198.us-east-2.compute.amazonaws.com:3001/api/products', {
->>>>>>> Stashed changes
+
+
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ descripcion: nombre, precio: parseFloat(precio), stock: parseInt(stock), codigo: codigoBarras }),
