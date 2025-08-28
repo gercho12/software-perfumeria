@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search } from 'lucide-react'; // Importar ícono de lupa
 import "./NuevoProducto.css";
 
@@ -7,19 +7,28 @@ import "./NuevoProducto.css";
 const GOOGLE_API_KEY = 'AIzaSyC9rDZbs1jco5Yl8pMPy5gXcXmAmg_qVfw'; 
 const CUSTOM_SEARCH_ENGINE_ID = 'f0edc0e41779c491c';
 
-export default function NuevoProducto({ onClose }) { 
+export default function NuevoProducto({ onClose, codigoPreestablecido }) { 
   const [nombre, setNombre] = useState("");
   const [precio, setPrecio] = useState("");
   const [stock, setStock] = useState("");
-  const [codigoBarras, setCodigoBarras] = useState("");
+  const [codigoBarras, setCodigoBarras] = useState(codigoPreestablecido || "");
   const [error, setError] = useState(null); // Error general del formulario
   const [searchError, setSearchError] = useState(null); // Error específico de la búsqueda
   const [isLoading, setIsLoading] = useState(false); // Estado de carga para la búsqueda
 
+  // Efecto para establecer el código preestablecido y buscar automáticamente
+  useEffect(() => {
+    if (codigoPreestablecido) {
+      setCodigoBarras(codigoPreestablecido);
+      // Buscar información automáticamente si hay código preestablecido
+      handleSearchProduct();
+    }
+  }, [codigoPreestablecido]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/products', {
+      const response = await fetch('http://18.119.112.192:3001/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ descripcion: nombre, precio: parseFloat(precio), stock: parseInt(stock), codigo: codigoBarras }),
@@ -27,12 +36,18 @@ export default function NuevoProducto({ onClose }) {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      // Limpiar formulario después de éxito
-      setNombre("");
-      setPrecio("");
-      setStock("");
-      setCodigoBarras("");
-      setError(null); // Limpiar error general si hubo éxito
+      
+      // Si se abrió desde ventas, cerrar el modal
+      if (onClose) {
+        onClose();
+      } else {
+        // Limpiar formulario después de éxito (modo standalone)
+        setNombre("");
+        setPrecio("");
+        setStock("");
+        setCodigoBarras("");
+        setError(null);
+      }
     } catch (error) {
       setError("Error adding product: " + error.message);
       console.error(error);
@@ -253,7 +268,7 @@ export default function NuevoProducto({ onClose }) {
                     // **NOTA:** Este endpoint '/api/scrape-price' debe ser implementado en tu backend.
                     // Debe aceptar una URL en el cuerpo (ej: { url: pageUrl })
                     // y devolver el precio encontrado (ej: { price: 19.99 }) o un error.
-                    const scrapeResponse = await fetch('http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/scrape-price', { // Asegúrate que la URL del backend sea correcta
+                    const scrapeResponse = await fetch('http://18.119.112.192:3001/api/scrape-price', { // Asegúrate que la URL del backend sea correcta
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ url: pageUrl })
@@ -319,9 +334,13 @@ export default function NuevoProducto({ onClose }) {
   if (error) {
     return <div>Error: {error}</div>;
   }
+  
   return (
     <div className="container">
-    {/* <button onClick={onClose} className="closeButton">X</button>  */}
+      {/* Solo mostrar botón de cerrar si se abrió desde un modal */}
+      {onClose && (
+        <button onClick={onClose} className="closeButton">×</button>
+      )}
 
       <h2 className="title">Agregar Nuevo Producto</h2>
       {/* Mostrar error general del formulario si existe */}
@@ -403,7 +422,7 @@ export default function NuevoProducto({ onClose }) {
           </div>
         </div>
         <button type="submit" className="submitButton">
-          Agregar Producto
+          {onClose ? "Crear y Agregar a Venta" : "Agregar Producto"}
         </button>
       </form>
     </div>

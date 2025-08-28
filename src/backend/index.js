@@ -18,6 +18,45 @@ const pool = mysql.createPool({
     port: 19902
 });
 
+// Función para inicializar la base de datos y crear tablas si no existen
+const inicializarBaseDatos = async () => {
+  try {
+    // Crear tabla ventas si no existe
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS ventas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        fecha DATETIME DEFAULT CURRENT_TIMESTAMP,
+        total DECIMAL(10,2) NOT NULL,
+        estado ENUM('activa', 'finalizada') DEFAULT 'finalizada',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Crear tabla productos_venta si no existe
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS productos_venta (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        venta_id INT NOT NULL,
+        producto_id INT NOT NULL,
+        precio_venta DECIMAL(10,2) NOT NULL,
+        cantidad INT NOT NULL,
+        subtotal DECIMAL(10,2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (venta_id) REFERENCES ventas(id) ON DELETE CASCADE,
+        FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE
+      )
+    `);
+
+    console.log('✅ Base de datos inicializada correctamente');
+  } catch (error) {
+    console.error('❌ Error inicializando base de datos:', error);
+  }
+};
+
+// Inicializar base de datos al arrancar el servidor
+inicializarBaseDatos();
+
 app.use(express.json());
 
 // GET /api/products - CORRECTED for Pagination and Search
@@ -102,7 +141,6 @@ app.put('/api/products/:id', async (req, res) => {
       res.status(500).json({ error: 'Failed to update product' });
   }
 });
-
 
 // DELETE /api/products/:id (Delete product) - Add this for completeness
 app.delete('/api/products/:id', async (req, res) => {
@@ -262,6 +300,192 @@ app.post('/api/scrape-price', async (req, res) => {
     }
 });
 
+// ===== NUEVAS APIs PARA VENTAS =====
+
+// GET /api/ventas - Obtener todas las ventas (OPTIMIZADO)
+app.get('/api/ventas', async (req, res) => {
+  try {
+    // Obtener todas las ventas con sus productos en una sola consulta
+    const [ventasData] = await pool.execute(`
+      SELECT 
+        v.id,
+        v.fecha,
+        v.total,
+        v.estado,
+        v.created_at,
+        v.updated_at,
+        pv.producto_id,
+        p.descripcion,
+        pv.precio_venta,
+        pv.cantidad,
+        pv.subtotal
+      FROM ventas v
+      LEFT JOIN productos_venta pv ON v.id = pv.venta_id
+      LEFT JOIN productos p ON pv.producto_id = p.id
+      ORDER BY v.fecha DESC, v.id DESC
+    `);
+
+    // Agrupar los resultados por venta
+    const ventasMap = new Map();
+    
+    ventasData.forEach(row => {
+      if (!ventasMap.has(row.id)) {
+        // Crear la venta base
+        ventasMap.set(row.id, {
+          id: row.id,
+          fecha: row.fecha,
+          total: row.total,
+          estado: row.estado,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+          productos: []
+        });
+      }
+      
+      // Agregar producto si existe
+      if (row.producto_id) {
+        ventasMap.get(row.id).productos.push({
+          id: row.producto_id,
+          descripcion: row.descripcion,
+          precio: row.precio_venta,
+          cantidad: row.cantidad,
+          subtotal: row.subtotal
+        });
+      }
+    });
+
+    // Convertir el Map a array
+    const ventas = Array.from(ventasMap.values());
+    
+    res.json(ventas);
+  } catch (error) {
+    console.error('Error fetching ventas:', error);
+    res.status(500).json({ error: 'Failed to fetch ventas' });
+  }
+});
+
+// GET /api/ventas/:id - Obtener una venta específica con sus productos
+app.get('/api/ventas/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Obtener la venta con sus productos en una sola consulta
+    const [ventaData] = await pool.execute(`
+      SELECT 
+        v.*,
+        pv.producto_id,
+        p.descripcion,
+        pv.precio_venta,
+        pv.cantidad,
+        pv.subtotal
+      FROM ventas v
+      LEFT JOIN productos_venta pv ON v.id = pv.venta_id
+      LEFT JOIN productos p ON pv.producto_id = p.id
+      WHERE v.id = ?
+    `, [id]);
+    
+    if (ventaData.length === 0) {
+      return res.status(404).json({ error: 'Venta no encontrada' });
+    }
+    
+    // Construir la respuesta
+    const venta = {
+      id: ventaData[0].id,
+      fecha: ventaData[0].fecha,
+      total: ventaData[0].total,
+      estado: ventaData[0].estado,
+      created_at: ventaData[0].created_at,
+      updated_at: ventaData[0].updated_at,
+      productos: []
+    };
+    
+    // Agregar productos si existen
+    ventaData.forEach(row => {
+      if (row.producto_id) {
+        venta.productos.push({
+          id: row.producto_id,
+          descripcion: row.descripcion,
+          precio: row.precio_venta,
+          cantidad: row.cantidad,
+          subtotal: row.subtotal
+        });
+      }
+    });
+    
+    res.json(venta);
+  } catch (error) {
+    console.error('Error fetching venta:', error);
+    res.status(500).json({ error: 'Failed to fetch venta' });
+  }
+});
+
+// POST /api/ventas - Crear nueva venta
+app.post('/api/ventas', async (req, res) => {
+  try {
+    const { productos, total } = req.body;
+    
+    // Insertar la venta principal
+    const [ventaResult] = await pool.execute(
+      'INSERT INTO ventas (fecha, total, estado) VALUES (NOW(), ?, ?)',
+      [total, 'finalizada']
+    );
+    
+    const ventaId = ventaResult.insertId;
+    
+    // Insertar los productos de la venta
+    for (const producto of productos) {
+      await pool.execute(
+        'INSERT INTO productos_venta (venta_id, producto_id, precio_venta, cantidad, subtotal) VALUES (?, ?, ?, ?, ?)',
+        [ventaId, producto.id, producto.precio, producto.cantidad, producto.subtotal]
+      );
+      
+      // Actualizar stock del producto
+      await pool.execute(
+        'UPDATE productos SET stock = stock - ? WHERE id = ?',
+        [producto.cantidad, producto.id]
+      );
+    }
+    
+    res.status(201).json({ 
+      message: 'Venta creada exitosamente', 
+      ventaId: ventaId 
+    });
+  } catch (error) {
+    console.error('Error creating venta:', error);
+    res.status(500).json({ error: 'Failed to create venta' });
+  }
+});
+
+// DELETE /api/ventas/:id - Eliminar venta
+app.delete('/api/ventas/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Primero restaurar el stock de los productos
+    const [productosVenta] = await pool.execute(
+      'SELECT producto_id, cantidad FROM productos_venta WHERE venta_id = ?',
+      [id]
+    );
+    
+    for (const item of productosVenta) {
+      await pool.execute(
+        'UPDATE productos SET stock = stock + ? WHERE id = ?',
+        [item.cantidad, item.producto_id]
+      );
+    }
+    
+    // Eliminar productos de la venta
+    await pool.execute('DELETE FROM productos_venta WHERE venta_id = ?', [id]);
+    
+    // Eliminar la venta
+    await pool.execute('DELETE FROM ventas WHERE id = ?', [id]);
+    
+    res.status(200).json({ message: 'Venta eliminada exitosamente' });
+  } catch (error) {
+    console.error('Error deleting venta:', error);
+    res.status(500).json({ error: 'Failed to delete venta' });
+  }
+});
 
 app.listen(port, () => {
   console.log(`Backend server listening on port ${port}`);
