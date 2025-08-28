@@ -18,7 +18,7 @@ export default function RegistroVentas() {
   const codigoInputRef = useRef(null);
 
   // Configuración de la API
-  const API_BASE = 'http://18.119.112.192:3001';
+  const API_BASE = 'http://ec2-3-21-46-19.us-east-2.compute.amazonaws.com:3001';
 
   // Efecto para enfocar el input de código de barras cuando se abre la sección
   useEffect(() => {

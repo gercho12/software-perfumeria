@@ -28,7 +28,7 @@ export default function NuevoProducto({ onClose, codigoPreestablecido }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch('http://18.119.112.192:3001/api/products', {
+      const response = await fetch('http://ec2-3-21-46-19.us-east-2.compute.amazonaws.com:3001/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ descripcion: nombre, precio: parseFloat(precio), stock: parseInt(stock), codigo: codigoBarras }),
@@ -268,7 +268,7 @@ export default function NuevoProducto({ onClose, codigoPreestablecido }) {
                     // **NOTA:** Este endpoint '/api/scrape-price' debe ser implementado en tu backend.
                     // Debe aceptar una URL en el cuerpo (ej: { url: pageUrl })
                     // y devolver el precio encontrado (ej: { price: 19.99 }) o un error.
-                    const scrapeResponse = await fetch('http://18.119.112.192:3001/api/scrape-price', { // Asegúrate que la URL del backend sea correcta
+                    const scrapeResponse = await fetch('http://ec2-3-21-46-19.us-east-2.compute.amazonaws.com:3001/api/scrape-price', { // Asegúrate que la URL del backend sea correcta
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ url: pageUrl })
