@@ -22,7 +22,7 @@ export default function Inventario() {
 
   const fetchProducts = useCallback(async () => {
     try {
-      const url = new URL('http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/products');
+      const url = new URL('http://3.21.46.19:3001/api/products');
       url.searchParams.append('page', currentPage);
       url.searchParams.append('limit', ITEMS_PER_PAGE);
       if (debouncedSearchTerm) {
@@ -80,7 +80,7 @@ export default function Inventario() {
 
   const updateStock = async (producto, newStock) => {
     try {
-      const response = await fetch(`http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/products/${producto.id}`, {
+      const response = await fetch(`http://3.21.46.19:3001/api/products/${producto.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...producto, stock: newStock }),
@@ -107,7 +107,7 @@ export default function Inventario() {
   const saveEdit = async () => {
     if (editingProduct) {
       try {
-        const response = await fetch(`http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/products/${editingProduct.id}`, {
+        const response = await fetch(`http://3.21.46.19:3001/api/products/${editingProduct.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(editingProduct),
@@ -128,7 +128,7 @@ export default function Inventario() {
   const eliminarProducto = async () => {
     if (editingProduct) {
       try {
-        const response = await fetch(`http://ec2-18-119-112-192.us-east-2.compute.amazonaws.com:3001/api/products/${editingProduct.id}`, {
+        const response = await fetch(`http://3.21.46.19:3001/api/products/${editingProduct.id}`, {
           method: 'DELETE'
         });
         if (!response.ok) {
