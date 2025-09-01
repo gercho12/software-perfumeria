@@ -18,7 +18,7 @@ export default function RegistroVentas() {
   const codigoInputRef = useRef(null);
 
   // Configuración de la API
-  const API_BASE = 'http://localhost:3001';
+  const API_BASE = 'http://18.119.160.177:3001';
 
   // Efecto para manejar eventos globales de teclado y cargar historial
   useEffect(() => {
