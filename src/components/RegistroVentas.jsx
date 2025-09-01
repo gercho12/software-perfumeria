@@ -20,14 +20,85 @@ export default function RegistroVentas() {
   // Configuración de la API
   const API_BASE = 'http://3.21.46.19:3001';
 
-  // Efecto para enfocar el input de código de barras cuando se abre la sección
+  // Efecto para manejar eventos globales de teclado y cargar historial
   useEffect(() => {
     if (codigoInputRef.current) {
       codigoInputRef.current.focus();
     }
+    
+    // Buffer para códigos de barras
+    let codigoBuffer = '';
+    let ultimoCaracter = Date.now();
+    let esEntradaManual = false;
+    
+    const handleGlobalKeyDown = (e) => {
+      // No procesar teclas si el foco está en un input de texto o número (excepto para espacio)
+      const targetTagName = e.target.tagName.toLowerCase();
+      const targetType = e.target.type?.toLowerCase();
+      const isInputField = targetTagName === 'input' && (targetType === 'text' || targetType === 'number');
+      
+      // El espacio siempre finaliza la venta, sin importar el foco
+      if (e.code === 'Space' && productosVenta.length > 0) {
+        e.preventDefault();
+        finalizarVenta();
+        return;
+      }
+
+      // Para el resto de las teclas, verificar si es entrada manual
+      esEntradaManual = isInputField;
+      
+      // Manejar tecla de retroceso para eliminar último producto
+      if (e.code === 'Backspace' && !esEntradaManual) {
+        e.preventDefault();
+        if (productosVenta.length > 0) {
+          const nuevosProductos = [...productosVenta];
+          nuevosProductos.pop();
+          setProductosVenta(nuevosProductos);
+        }
+        return;
+      }
+      
+      // Manejo de escáner de código de barras (solo si no es entrada manual)
+      if (!esEntradaManual) {
+        const ahora = Date.now();
+        const tiempoEntreCaracteres = ahora - ultimoCaracter;
+        
+        // Resetear buffer si el tiempo entre caracteres es muy largo (entrada manual)
+        if (tiempoEntreCaracteres > 100) {
+          codigoBuffer = '';
+        }
+        
+        ultimoCaracter = ahora;
+        
+        if (e.key.length === 1) {
+          codigoBuffer += e.key;
+        }
+        
+        // Detectar final de escaneo (típicamente termina con Enter)
+        if (e.code === 'Enter' && codigoBuffer.length > 0) {
+          procesarCodigoBarras(codigoBuffer);
+          codigoBuffer = '';
+          e.preventDefault();
+        }
+      } else if (e.code === 'Enter' && codigoBarras.trim()) {
+        // Procesar entrada manual cuando se presiona Enter en el input
+        e.preventDefault();
+        procesarCodigoBarras(codigoBarras);
+        setCodigoBarras('');
+      }
+    };
+
+    // Agregar listener global
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    
     // Cargar historial de ventas al abrir la sección
     cargarHistorialVentas();
-  }, []);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [productosVenta, codigoBarras]); // Dependencias actualizadas
 
   // Función para cargar el historial de ventas desde la base de datos
   const cargarHistorialVentas = async () => {
@@ -239,15 +310,13 @@ export default function RegistroVentas() {
     }
   };
 
-  // Función para manejar teclas (Enter para finalizar venta)
+  // Función para manejar teclas en el input
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
-      if (ventaActiva && productosVenta.length > 0) {
-        // Si hay una venta activa, finalizarla con Enter
-        finalizarVenta();
-      } else if (codigoBarras.trim()) {
-        // Si no hay venta activa, procesar el código escaneado
+      e.preventDefault();
+      if (codigoBarras.trim()) {
         procesarCodigoBarras(codigoBarras);
+        setCodigoBarras('');
       }
     }
   };
@@ -319,9 +388,10 @@ export default function RegistroVentas() {
             placeholder="Escanee o ingrese código de barras..."
             value={codigoBarras}
             onChange={(e) => setCodigoBarras(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyPress}
             className="codigo-input"
             disabled={isLoading}
+            autoComplete="off"
           />
           <button
             onClick={() => procesarCodigoBarras(codigoBarras)}

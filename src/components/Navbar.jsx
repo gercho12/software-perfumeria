@@ -11,13 +11,6 @@ export default function Navbar({ activeTab, setActiveTab }) {
       </h2>
 
       <h2 
-        className={`${activeTab === 'nuevo-producto' ? 'selected' : ""}`}
-        onClick={() => setActiveTab("nuevo-producto")}
-      >
-        Nuevo Producto
-      </h2>
-
-      <h2 
         className={`${activeTab === 'registro-ventas' ? 'selected' : ""}`}
         onClick={() => setActiveTab("registro-ventas")}
       >
